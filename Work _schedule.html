@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>動態排班萬年曆</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="排班萬年曆">
+    <meta name="theme-color" content="#4285F4">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --work-bg: #4285F4;
+            --work-text: #FFFFFF;
+            --off-bg: #F8BBD0;
+            --off-text: #000000;
+            --special-bg: #EA4335;
+            --special-text: #FFFFFF;
+            --bg-color: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text-main: #1a202c;
+            --text-sub: #4a5568;
+            --btn-bg: #f1f5f9;
+            --btn-hover: #e2e8f0;
+            --border-color: #e2e8f0;
+            --modal-bg: rgba(0, 0, 0, 0.5);
+        }
+
+        [data-theme="dark"] {
+            --work-bg: #3367D6;
+            --off-bg: #880E4F;
+            --off-text: #F8BBD0;
+            --special-bg: #C5221F;
+            --bg-color: #121212;
+            --card-bg: #1E1E1E;
+            --text-main: #E0E0E0;
+            --text-sub: #A0A0A0;
+            --btn-bg: #333333;
+            --btn-hover: #444444;
+            --border-color: #333333;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "微軟正黑體", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex; flex-direction: column; align-items: center;
+            padding: 20px 10px; margin: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        h1 { margin-bottom: 25px; font-size: 28px; text-align: center; }
+
+        .controls-wrapper {
+            display: flex; flex-direction: column; gap: 12px;
+            margin-bottom: 25px; width: 100%; max-width: 650px;
+        }
+        .controls-row {
+            display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+        }
+        .date-input-group {
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        input[type="month"] {
+            padding: 8px 12px; font-size: 15px; border: 1px solid var(--border-color);
+            border-radius: 8px; background-color: var(--card-bg); color: var(--text-main); outline: none;
+        }
+
+        .btn {
+            padding: 9px 16px; border: none; border-radius: 20px; font-size: 14px;
+            font-weight: bold; color: white; cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+            display: flex; align-items: center; gap: 6px; justify-content: center;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-set { background-color: #4285F4; }
+        .btn-download { background-color: #1DB99B; }
+        .btn-settings { background-color: #5f6368; }
+        .btn-theme { background-color: #fbbc04; color: #000; }
+        .btn-mode { background-color: #607d8b; }
+        .btn-notes { background-color: #ff9800; }
+
+        select.btn {
+            appearance: none; -webkit-appearance: none; text-align: center;
+            padding-right: 16px; padding-left: 16px; font-family: inherit;
+        }
+
+        .stats-container {
+            display: flex; gap: 15px; background-color: var(--card-bg); padding: 12px 24px;
+            border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px; font-size: 14px; font-weight: bold; justify-content: center; flex-wrap: wrap;
+        }
+        .stat-item span { margin-left: 5px; font-size: 16px; }
+        .stat-work { color: var(--work-bg); }
+        .stat-off { color: #d81b60; }
+        .stat-special { color: var(--special-bg); }
+
+        .legend-container {
+            display: flex; gap: 15px; margin-bottom: 15px; font-size: 14px;
+            color: var(--text-sub); flex-wrap: wrap; justify-content: center;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .dot { width: 14px; height: 14px; border-radius: 50%; }
+        .dot.work { background-color: var(--work-bg); }
+        .dot.off { background-color: var(--off-bg); }
+        .dot.special { background-color: var(--special-bg); }
+        .dot.note { background-color: #fbbc04; }
+        .dot.today { background-color: transparent; border: 2px solid #EA4335; box-sizing: border-box; }
+
+        .calendar-wrapper { width: 100%; max-width: 450px; padding: 10px; box-sizing: border-box; }
+        .calendar-card {
+            background-color: var(--card-bg); border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid var(--border-color);
+            padding: 20px; box-sizing: border-box; transition: background-color 0.3s;
+        }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .calendar-header button {
+            background-color: var(--btn-bg); color: var(--text-sub);
+            border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; cursor: pointer;
+        }
+        .calendar-header h2 { margin: 0; font-size: 22px; }
+
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+        .weekday { font-weight: bold; color: var(--text-sub); padding-bottom: 8px; font-size: 14px; }
+        
+        .day-cell {
+            aspect-ratio: 1 / 1.1; border-radius: 8px; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; cursor: pointer; font-size: 16px; font-weight: bold;
+            position: relative; user-select: none; transition: transform 0.1s;
+        }
+        .day-cell:active { transform: scale(0.95); }
+        .day-cell .status { font-size: 11px; margin-top: 2px; font-weight: normal; }
+        .day-cell .note-dot {
+            position: absolute; top: 4px; right: 4px; width: 8px; height: 8px;
+            background-color: #fbbc04; border-radius: 50%;
+        }
+
+        .day-work { background-color: var(--work-bg); color: var(--work-text); }
+        .day-off { background-color: var(--off-bg); color: var(--off-text); }
+        .day-special { background-color: var(--special-bg); color: var(--special-text); }
+        .empty-cell { background-color: transparent; cursor: default; }
+        
+        .is-today { box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px #EA4335 !important; z-index: 1; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--modal-bg); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: var(--card-bg); color: var(--text-main);
+            padding: 24px; border-radius: 16px; width: 90%; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .modal-content h3 { margin: 0; text-align: center; }
+        
+        .modal-content textarea {
+            width: 100%; height: 80px; padding: 10px; box-sizing: border-box;
+            border-radius: 8px; border: 1px solid var(--border-color);
+            background-color: var(--bg-color); color: var(--text-main); resize: none; font-family: inherit;
+        }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; }
+        .modal-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-cancel { background-color: var(--btn-bg); color: var(--text-main); }
+        .btn-save { background-color: var(--work-bg); color: white; }
+
+        /* 新增：備註清單列表樣式 */
+        #notesListContainer {
+            max-height: 250px; overflow-y: auto; text-align: left;
+            border: 1px solid var(--border-color); border-radius: 8px;
+            background-color: var(--bg-color); padding: 5px; margin-top: 10px;
+        }
+        .note-list-item {
+            padding: 12px 10px; border-bottom: 1px solid var(--border-color);
+            font-size: 15px; line-height: 1.4; color: var(--text-main);
+        }
+        .note-list-item:last-child { border-bottom: none; }
+        .note-list-date { color: #fbbc04; font-weight: bold; margin-bottom: 4px; font-size: 13px;}
+
+        @media (max-width: 450px) {
+            .controls-wrapper { width: 100%; gap: 10px; }
+            .controls-row { flex-direction: column; align-items: stretch; }
+            .date-input-group { flex-direction: column; align-items: stretch; }
+            .date-input-group input, .date-input-group button { width: 100%; box-sizing: border-box; }
+            select.btn { text-align: center; }
+        }
+
+        #exportWrapper { position: absolute; left: -9999px; top: 0; }
+        #exportContainer { background-color: #F8F9FA; padding: 40px; width: 800px; box-sizing: border-box; color: #1a202c; }
+        #exportTitle { text-align: center; font-size: 32px; margin-bottom: 30px; color: #1a202c; }
+        #exportGridContainer { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .export-card { background-color: #FFFFFF; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .export-card h3 { margin: 0 0 15px 0; text-align: center; font-size: 20px; color: #1a202c;}
+    </style>
+</head>
+<body>
+
+    <h1>動態排班萬年曆</h1>
+
+    <div class="controls-wrapper">
+        <div class="controls-row">
+            <select id="shiftModeSelect" class="btn btn-mode">
+                <option value="2on2off">🔄 模式：做二休二</option>
+                <option value="weekend">📅 模式：週休二日</option>
+                <option value="custom">✍️ 模式：自訂排班</option>
+            </select>
+            <div class="date-input-group">
+                <input type="month" id="monthPicker">
+                <button id="setViewBtn" class="btn btn-set">跳轉</button>
+            </div>
+        </div>
+        <div class="controls-row">
+            <button id="openNotesListBtn" class="btn btn-notes">📝 備註清單</button>
+            <button id="openDlModalBtn" class="btn btn-download">📥 下載班表</button>
+            <button id="settingsBtn" class="btn btn-settings">⚙️ 系統設定</button>
+            <button id="themeToggleBtn" class="btn btn-theme">🌙 切換深色</button>
+        </div>
+    </div>
+
+    <div class="stats-container" id="statsContainer">
+        <div class="stat-item stat-work">工作日 <span id="countWork">0</span></div>
+        <div class="stat-item stat-off">休假日 <span id="countOff">0</span></div>
+        <div class="stat-item stat-special">特休日 <span id="countSpecial">0</span></div>
+    </div>
+
+    <div class="legend-container">
+        <div class="legend-item"><div class="dot work"></div> 工作</div>
+        <div class="legend-item"><div class="dot off"></div> 休假</div>
+        <div class="legend-item"><div class="dot special"></div> 特休</div>
+        <div class="legend-item"><div class="dot note"></div> 備註</div>
+        <div class="legend-item"><div class="dot today"></div> 當日</div>
+    </div>
+
+    <div class="calendar-wrapper" id="captureArea">
+        <div class="calendar-card" id="touchArea">
+            <div class="calendar-header">
+                <button id="prevBtn">&lt;</button>
+                <h2 id="monthYearText">2026年 3月</h2>
+                <button id="nextBtn">&gt;</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="notesListModal">
+        <div class="modal-content">
+            <h3>目前所有備註</h3>
+            <div id="notesListContainer">
+                </div>
+            <button class="modal-btn btn-cancel" id="closeNotesListBtn" style="width: 100%; margin-top: 5px;">關閉</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="downloadModal">
+        <div class="modal-content">
+            <h3>選擇下載格式</h3>
+            <button class="btn btn-set" style="padding: 12px;" id="dlMonthBtn">📥 下載「當月」班表</button>
+            <button class="btn btn-download" style="padding: 12px;" id="dlQuarterBtn">📊 下載「季」班表 (兩兩一組)</button>
+            <button class="btn btn-settings" style="padding: 12px; background-color: #9c27b0;" id="dlYearBtn">📆 下載「全年」班表 (兩兩一組)</button>
+            <button class="modal-btn btn-cancel" id="closeDlModalBtn" style="margin-top: 5px;">取消</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="dayModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">日期設定</h3>
+            <p id="modalShiftInfo" style="font-size: 14px; color: var(--text-sub); margin: 0; text-align: center;"></p>
+            
+            <button id="toggleSpecialBtn" class="btn btn-set" style="padding: 12px; margin-top: 5px;">切換為特休</button>
+            
+            <div id="customModeActions" style="display: none; flex-direction: column; gap: 8px; margin-top: 5px;">
+                <button class="btn" id="setWorkBtn" style="background-color: var(--work-bg); padding: 10px;">設為工作日</button>
+                <button class="btn" id="setOffBtn" style="background-color: #d81b60; padding: 10px;">設為休假日</button>
+                <button class="btn" id="setSpecialBtn" style="background-color: var(--special-bg); padding: 10px;">設為特休日</button>
+            </div>
+
+            <textarea id="noteInput" placeholder="在此輸入備註 (如：看牙醫、聚餐...)" style="margin-top: 10px;"></textarea>
+            <div class="modal-actions">
+                <button class="modal-btn btn-cancel" id="closeModalBtn">取消</button>
+                <button class="modal-btn btn-save" id="saveModalBtn">儲存備註</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <h3>系統設定</h3>
+            <div id="anchorDateContainer">
+                <label style="display: block; font-size: 14px; color: var(--text-sub); margin-bottom: 5px;">(僅限「做二休二」模式生效)</label>
+                <label style="display: block; font-size: 14px;">自訂休假起始日 (休假第1天)：</label>
+                <input type="date" id="anchorDateInput" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); box-sizing: border-box; margin-bottom: 15px;">
+            </div>
+            <button id="resetDataBtn" class="btn btn-settings" style="background-color: #EA4335; padding: 10px;">⚠️ 清除所有特休/自訂休假與備註</button>
+            <div class="modal-actions">
+                <button class="modal-btn btn-cancel" id="closeSettingsBtn">關閉</button>
+                <button class="modal-btn btn-save" id="saveSettingsBtn">儲存設定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="exportWrapper">
+        <div id="exportContainer">
+            <h2 id="exportTitle">排班表</h2>
+            <div id="exportGridContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        let shiftMode = localStorage.getItem('shiftMode') || '2on2off';
+        let customOffDays = JSON.parse(localStorage.getItem('customOffDays')) || []; 
+        let anchorDateStr = localStorage.getItem('anchorDate') || '2026-03-01';
+        let specialDays = JSON.parse(localStorage.getItem('specialDays')) || [];
+        let notesData = JSON.parse(localStorage.getItem('notesData')) || {};
+        let isDarkMode = localStorage.getItem('darkMode') === 'true';
+
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+        let currentYear = today.getFullYear();
+        let currentMonth = today.getMonth();
+        let selectedDateStr = ""; 
+
+        if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('shiftModeSelect').value = shiftMode;
+        document.getElementById('monthPicker').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+
+        const calendarGrid = document.getElementById('calendarGrid');
+        const monthYearText = document.getElementById('monthYearText');
+        const dayModal = document.getElementById('dayModal');
+        const settingsModal = document.getElementById('settingsModal');
+        const downloadModal = document.getElementById('downloadModal');
+        const notesListModal = document.getElementById('notesListModal'); // 新增
+
+        // --- 模式切換邏輯 (加入確認與清除機制) ---
+        document.getElementById('shiftModeSelect').addEventListener('change', (e) => {
+            if(confirm("切換排班模式將會清除您目前所有的「特休」、「自訂休假」與「備註」紀錄，確定要切換嗎？")) {
+                shiftMode = e.target.value;
+                localStorage.setItem('shiftMode', shiftMode);
+                
+                // 清除所有舊資料
+                specialDays = [];
+                customOffDays = [];
+                notesData = {};
+                localStorage.removeItem('specialDays');
+                localStorage.removeItem('customOffDays');
+                localStorage.removeItem('notesData');
+                
+                // 跳回當前真實月份
+                currentYear = today.getFullYear();
+                currentMonth = today.getMonth();
+                document.getElementById('monthPicker').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+                
+                renderCalendar();
+            } else {
+                // 如果按取消，則把下拉選單選回原本的模式
+                e.target.value = shiftMode;
+            }
+        });
+
+        function getShiftStatus(targetDate, dateString) {
+            if (shiftMode === 'custom') {
+                return customOffDays.includes(dateString) ? 'off' : 'work';
+            } else if (shiftMode === 'weekend') {
+                const dayOfWeek = targetDate.getDay();
+                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'off' : 'work';
+            } else {
+                const parts = anchorDateStr.split('-');
+                const anchor = new Date(parts[0], parts[1] - 1, parts[2]);
+                const utcAnchor = Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+                const utcTarget = Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+                const diffDays = Math.floor((utcTarget - utcAnchor) / (1000 * 60 * 60 * 24));
+
+                let cycleIndex = diffDays % 4;
+                if (cycleIndex < 0) cycleIndex = (cycleIndex + 4) % 4;
+                return (cycleIndex === 0 || cycleIndex === 1) ? 'off' : 'work';
+            }
+        }
+
+        function generateMonthHTML(year, month, isExport = false) {
+            let html = '';
+            const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+            weekdays.forEach(day => { html += `<div class="weekday" style="${isExport ? 'color:#4a5568;' : ''}">${day}</div>`; });
+
+            const firstDayOfMonth = new Date(year, month, 1);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            let firstDayWeekday = firstDayOfMonth.getDay() - 1;
+            if (firstDayWeekday === -1) firstDayWeekday = 6; 
+
+            for (let i = 0; i < firstDayWeekday; i++) { html += `<div class="empty-cell"></div>`; }
+
+            let countW = 0, countO = 0, countS = 0;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
+                const dateString = `${year}-${month + 1}-${day}`;
+                
+                const baseStatus = getShiftStatus(currentDate, dateString); 
+                const isSpecial = specialDays.includes(dateString);
+                const hasNote = !!notesData[dateString];
+                
+                const isToday = (dateString === todayStr);
+
+                let cellClass = 'day-cell ';
+                if (isToday && !isExport) cellClass += 'is-today ';
+
+                let content = `${day}`;
+                let inlineStyle = ''; 
+
+                if (hasNote) { content += `<div class="note-dot" style="${isExport ? 'background-color:#fbbc04;' : ''}"></div>`; }
+
+                if (baseStatus === 'off') {
+                    cellClass += 'day-off';
+                    content += `<div class="status">休</div>`;
+                    if(isExport) inlineStyle = 'background-color:#F8BBD0; color:#000000;';
+                    countO++;
+                } else {
+                    if (isSpecial) {
+                        cellClass += 'day-special';
+                        content += `<div class="status">特休</div>`;
+                        if(isExport) inlineStyle = 'background-color:#EA4335; color:#FFFFFF;';
+                        countS++;
+                    } else {
+                        cellClass += 'day-work';
+                        content += `<div class="status">工</div>`;
+                        if(isExport) inlineStyle = 'background-color:#4285F4; color:#FFFFFF;';
+                        countW++;
+                    }
+                }
+
+                const clickEvent = isExport ? '' : `onclick="openDayModal('${dateString}', '${baseStatus}', ${isSpecial})"`;
+                html += `<div class="${cellClass}" style="${inlineStyle}" ${clickEvent}>${content}</div>`;
+            }
+            return { html, stats: { countW, countO, countS } };
+        }
+
+        function renderCalendar() {
+            monthYearText.textContent = `${currentYear}年 ${currentMonth + 1}月`;
+            const result = generateMonthHTML(currentYear, currentMonth, false);
+            calendarGrid.innerHTML = result.html;
+
+            document.getElementById('countWork').textContent = result.stats.countW;
+            document.getElementById('countOff').textContent = result.stats.countO;
+            document.getElementById('countSpecial').textContent = result.stats.countS;
+        }
+
+        // --- 單日設定 Modal ---
+        function openDayModal(dateStr, baseStatus, isSpecial) {
+            selectedDateStr = dateStr;
+            document.getElementById('modalTitle').textContent = `${dateStr} 設定`;
+            document.getElementById('noteInput').value = notesData[dateStr] || "";
+
+            const infoText = document.getElementById('modalShiftInfo');
+            const toggleBtn = document.getElementById('toggleSpecialBtn');
+            const customActions = document.getElementById('customModeActions');
+
+            let currentStatusText = "工作日";
+            if(isSpecial) currentStatusText = "特休日";
+            else if(baseStatus === 'off') currentStatusText = "休假日";
+            infoText.textContent = `目前狀態：「${currentStatusText}」`;
+
+            if (shiftMode === '2on2off' || shiftMode === 'weekend') {
+                customActions.style.display = 'none';
+                if (baseStatus === 'off') {
+                    toggleBtn.style.display = 'none';
+                    infoText.textContent += " (排定之休假無法變更)";
+                } else {
+                    toggleBtn.style.display = 'block';
+                    if (isSpecial) {
+                        toggleBtn.textContent = "取消特休 (恢復工作日)";
+                        toggleBtn.style.backgroundColor = "#5f6368";
+                    } else {
+                        toggleBtn.textContent = "設為特休";
+                        toggleBtn.style.backgroundColor = "#EA4335";
+                    }
+                }
+            } else {
+                toggleBtn.style.display = 'none';
+                customActions.style.display = 'flex';
+            }
+            dayModal.style.display = 'flex';
+        }
+
+        function saveNoteData() {
+            const noteText = document.getElementById('noteInput').value.trim();
+            if (noteText) notesData[selectedDateStr] = noteText;
+            else delete notesData[selectedDateStr];
+            localStorage.setItem('notesData', JSON.stringify(notesData));
+        }
+
+        document.getElementById('toggleSpecialBtn').addEventListener('click', () => {
+            saveNoteData();
+            const index = specialDays.indexOf(selectedDateStr);
+            if (index === -1) specialDays.push(selectedDateStr);
+            else specialDays.splice(index, 1);
+            localStorage.setItem('specialDays', JSON.stringify(specialDays));
+            dayModal.style.display = 'none'; renderCalendar();
+        });
+
+        function setCustomDayStatus(type) {
+            saveNoteData();
+            specialDays = specialDays.filter(d => d !== selectedDateStr);
+            customOffDays = customOffDays.filter(d => d !== selectedDateStr);
+            if (type === 'off') customOffDays.push(selectedDateStr);
+            else if (type === 'special') specialDays.push(selectedDateStr);
+
+            localStorage.setItem('specialDays', JSON.stringify(specialDays));
+            localStorage.setItem('customOffDays', JSON.stringify(customOffDays));
+            dayModal.style.display = 'none'; renderCalendar();
+        }
+
+        document.getElementById('setWorkBtn').addEventListener('click', () => setCustomDayStatus('work'));
+        document.getElementById('setOffBtn').addEventListener('click', () => setCustomDayStatus('off'));
+        document.getElementById('setSpecialBtn').addEventListener('click', () => setCustomDayStatus('special'));
+
+        document.getElementById('saveModalBtn').addEventListener('click', () => {
+            saveNoteData();
+            dayModal.style.display = 'none'; renderCalendar();
+        });
+        document.getElementById('closeModalBtn').addEventListener('click', () => dayModal.style.display = 'none');
+
+        // --- 備註清單 Modal 邏輯 ---
+        document.getElementById('openNotesListBtn').addEventListener('click', () => {
+            const container = document.getElementById('notesListContainer');
+            container.innerHTML = '';
+            
+            const dates = Object.keys(notesData);
+            if (dates.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color: var(--text-sub); padding: 20px 0;">目前沒有任何備註</p>';
+            } else {
+                // 將日期依照先後順序排列
+                dates.sort((a, b) => new Date(a) - new Date(b));
+                
+                dates.forEach(date => {
+                    const div = document.createElement('div');
+                    div.className = 'note-list-item';
+                    div.innerHTML = `<div class="note-list-date">${date}</div><div>${notesData[date].replace(/\n/g, '<br>')}</div>`;
+                    container.appendChild(div);
+                });
+            }
+            notesListModal.style.display = 'flex';
+        });
+        document.getElementById('closeNotesListBtn').addEventListener('click', () => notesListModal.style.display = 'none');
+
+        // --- 系統設定 Modal ---
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            document.getElementById('anchorDateInput').value = anchorDateStr;
+            const anchorContainer = document.getElementById('anchorDateContainer');
+            anchorContainer.style.display = (shiftMode === '2on2off') ? 'block' : 'none';
+            settingsModal.style.display = 'flex';
+        });
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => settingsModal.style.display = 'none');
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            const val = document.getElementById('anchorDateInput').value;
+            if (val) { anchorDateStr = val; localStorage.setItem('anchorDate', anchorDateStr); }
+            settingsModal.style.display = 'none'; renderCalendar();
+        });
+        document.getElementById('resetDataBtn').addEventListener('click', () => {
+            if(confirm("確定要清除所有的排班設定、特休與備註紀錄嗎？此動作無法復原。")) {
+                specialDays = []; notesData = {}; customOffDays = [];
+                localStorage.removeItem('specialDays'); 
+                localStorage.removeItem('notesData');
+                localStorage.removeItem('customOffDays');
+                settingsModal.style.display = 'none'; renderCalendar();
+            }
+        });
+
+        document.getElementById('openDlModalBtn').addEventListener('click', () => downloadModal.style.display = 'flex');
+        document.getElementById('closeDlModalBtn').addEventListener('click', () => downloadModal.style.display = 'none');
+
+        document.getElementById('prevBtn').addEventListener('click', () => changeMonth(-1));
+        document.getElementById('nextBtn').addEventListener('click', () => changeMonth(1));
+        function changeMonth(offset) {
+            currentMonth += offset;
+            if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+            if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+            document.getElementById('monthPicker').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            renderCalendar();
+        }
+        document.getElementById('setViewBtn').addEventListener('click', () => {
+            const val = document.getElementById('monthPicker').value;
+            if(val) {
+                const parts = val.split('-');
+                currentYear = parseInt(parts[0]); currentMonth = parseInt(parts[1]) - 1;
+                renderCalendar();
+            }
+        });
+        document.getElementById('themeToggleBtn').addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
+            else document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('darkMode', isDarkMode);
+        });
+
+        window.onclick = function(event) {
+            if (event.target == dayModal) dayModal.style.display = "none";
+            if (event.target == settingsModal) settingsModal.style.display = "none";
+            if (event.target == downloadModal) downloadModal.style.display = "none";
+            if (event.target == notesListModal) notesListModal.style.display = "none";
+        }
+
+        function getModeName() {
+            if(shiftMode === 'custom') return '自訂';
+            if(shiftMode === 'weekend') return '週休二日';
+            return '做二休二';
+        }
+
+        function executeDownload(title, monthsToGenerate, filename) {
+            downloadModal.style.display = 'none';
+            const exportTitle = document.getElementById('exportTitle');
+            const exportGridContainer = document.getElementById('exportGridContainer');
+            const exportContainer = document.getElementById('exportContainer');
+
+            exportTitle.textContent = title;
+            exportGridContainer.innerHTML = ''; 
+
+            monthsToGenerate.forEach(item => {
+                const result = generateMonthHTML(item.year, item.month, true);
+                const card = document.createElement('div');
+                card.className = 'export-card';
+                card.innerHTML = `<h3>${item.year}年 ${item.month + 1}月</h3><div class="calendar-grid" style="gap:4px;">${result.html}</div>`;
+                exportGridContainer.appendChild(card);
+            });
+
+            html2canvas(exportContainer, { scale: 2, backgroundColor: '#F8F9FA' }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = filename;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        document.getElementById('dlMonthBtn').addEventListener('click', () => {
+            downloadModal.style.display = 'none';
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            document.documentElement.removeAttribute('data-theme'); 
+            html2canvas(document.getElementById('captureArea'), { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `${getModeName()}班表_${currentYear}年${currentMonth + 1}月.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                if(currentTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            });
+        });
+
+        document.getElementById('dlQuarterBtn').addEventListener('click', () => {
+            const quarter = Math.floor(currentMonth / 3) + 1;
+            const startMonth = (quarter - 1) * 3;
+            const months = [
+                { year: currentYear, month: startMonth },
+                { year: currentYear, month: startMonth + 1 },
+                { year: currentYear, month: startMonth + 2 }
+            ];
+            executeDownload(`${currentYear}年 Q${quarter} 季班表 (${getModeName()})`, months, `季班表_${currentYear}_Q${quarter}.png`);
+        });
+
+        document.getElementById('dlYearBtn').addEventListener('click', () => {
+            const months = [];
+            for(let m = 0; m < 12; m++) { months.push({ year: currentYear, month: m }); }
+            executeDownload(`${currentYear}年 全年班表 (${getModeName()})`, months, `年班表_${currentYear}.png`);
+        });
+
+        renderCalendar();
+        
+        let touchStartX = 0; let touchEndX = 0;
+        const touchArea = document.getElementById('touchArea');
+        touchArea.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
+        touchArea.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            if (touchEndX < touchStartX - 50) changeMonth(1); 
+            if (touchEndX > touchStartX + 50) changeMonth(-1); 
+        }, {passive: true});
+    </script>
+</body>
+</html>
